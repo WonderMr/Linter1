@@ -1,0 +1,20 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "bsl",
+			"command": "oscript",
+			"args": [
+				"${file}"
+			],
+			"problemMatcher": [
+				"$OneScript Linter"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"label": "oscript: OneScript: run"
+		}
+	]
+}
