@@ -11,6 +11,16 @@ Function s(c)
     Возврат ret; 
 EndFunction // FunctionName()
 
+Function ss(c)
+    ret                 =   "";
+    Для i = 1
+    По  c
+    Цикл
+        ret             =   ret + " ";
+    КонецЦикла;
+    Возврат ret; 
+EndFunction // FunctionName()
+
 Function fix_start_pos(f_str, lvl)
 	//Сообщить(f_str);
 	obj_temp_char       =   Новый РегулярноеВыражение("\@\!\#\$\%\!\@\$\%\^\#\!\@");
@@ -58,9 +68,13 @@ Function parse_body(bodyStr, lvl)
 			next_op		=	_obj_clean3.Replace(next_op, "");
 			code		=	_obj_clean.Replace(op[3].Значение, " ");
 			code		=	_obj_clean3.Replace(op[3].Значение, "");
-			НачалоОп	=		СтрСравнить(next_op, "Для") = 0
-						Или		СтрСравнить(next_op, "Если") = 0
-						Или		СтрСравнить(next_op, "Пока") = 0;
+			НачалоОп	=	СтрСравнить(next_op, "Для") = 0
+						Или	СтрСравнить(next_op, "Если") = 0
+						Или	СтрСравнить(next_op, "Пока") = 0;
+			ПолётНазад	=	СтрСравнить(next_op, "КонецЕсли;") = 0
+						Или	СтрСравнить(next_op, "КонецЦикла;") = 0
+						Или	СтрСравнить(next_op, "КонецПопытки;") = 0
+						Или	СтрСравнить(next_op, "ИначеЕсли") = 0;
 			Если НачалоОп
 			Тогда
 				ret		=	get_code(ret, fix_start_pos(code, lvl), Символы.ПС);
@@ -111,10 +125,7 @@ Function parse_body(bodyStr, lvl)
 					ret		=	get_code(ret, fix_start_pos(code, lvl), Символы.ПС);
 					ret		=	ret +	fix_start_pos(next_op, lvl - 1) + Символы.ПС;
 					prev_op	=	next_op;
-			ИначеЕсли  	СтрСравнить(next_op, "КонецЕсли;") = 0
-			Или			СтрСравнить(next_op, "КонецЦикла;") = 0
-			Или			СтрСравнить(next_op, "КонецПопытки;") = 0
-			Или			СтрСравнить(next_op, "ИначеЕсли") = 0
+			ИначеЕсли  	ПолётНазад
 			Тогда
 				ret		=	get_code(ret, fix_start_pos(code, lvl), Символы.ПС);
 				lvl		=	lvl - 1;
@@ -189,6 +200,30 @@ wTxt                    =   noDoubleNL;
     tFuncNew            =   preFunc + Символы.ПС + tFuncNew + Символы.ПС;
     wTxt                =   СтрЗаменить(wTxt, wholeMatch, tFuncNew);    
 	Сообщить("Работаю над " + nameFunc);
+КонецЦикла;
+
+Равно					=	Новый РегулярноеВыражение("^([^""\n\(]+)?=(\s.*)$");
+eqs						=	Равно.Matches(wTxt);
+max						=	0;
+Для каждого eq
+Из eqs Цикл
+	Если eq.Группы[1].Длина > max
+	Тогда
+		max 			=	eq.Группы[1].Длина;	
+	КонецЕсли;
+КонецЦикла;
+Пока не max % 4 = 0
+Цикл
+	max					=	max + 1;
+КонецЦикла;
+subtotal				=	max;
+Для каждого eq
+Из eqs Цикл		
+	newspaces			=	(subtotal - eq.Группы[1].Длина);
+	st					=	eq.Группы[1].Значение;
+	en					=	eq.Группы[2].Значение;
+	newl				=	st + ss(newspaces) + "=  " + en;
+	wTxt				=	СтрЗаменить(wTxt, eq.Группы[0].Значение, newl);
 КонецЦикла;
 
 ИсхФайл                 =   Новый ЗаписьТекста();
