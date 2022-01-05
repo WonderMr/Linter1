@@ -12,83 +12,124 @@ Function s(c)
 EndFunction // FunctionName()
 
 Function fix_start_pos(f_str, lvl)
-    obj_b_start         =   Новый РегулярноеВыражение(";");
-    fixed               =   obj_b_start.Replace(f_str, ";" + Символы.ПС);
+	//Сообщить(f_str);
+	obj_temp_char       =   Новый РегулярноеВыражение("\@\!\#\$\%\!\@\$\%\^\#\!\@");
+    obj_b_start         =   Новый РегулярноеВыражение("((?:^|;)*?[^""]*?)(;)([^""]*?(?:;|$))");
     obj_s_start         =   Новый РегулярноеВыражение("^[\t ]*");
-    fixed               =   obj_s_start.Replace(fixed, s(lvl));
-    obj_end             =   Новый РегулярноеВыражение("$\r*\n*^[\t ]*$");
-    fixed               =   obj_end.Replace(fixed, "");
-    Возврат fixed; 
+	obj_empty           =   Новый РегулярноеВыражение("^[\t ]*\r*\n*;*[\t ]*\r*\n");	
+    obj_end             =   Новый РегулярноеВыражение("$\r*\n*^[\t ]*$");	
+	fixed1				=	obj_empty.Replace(f_str, "");
+    fixed               =   obj_b_start.Replace(fixed1, "$1;" + Символы.ПС + "$3");
+	fixed2              =   obj_s_start.Replace(fixed, s(lvl));
+    fixed3              =   obj_end.Replace(fixed2, "");
+    Возврат fixed3; 
+EndFunction
+
+Function get_code(p1, code, p2)
+	space				=	Новый РегулярноеВыражение("^(\r*\n)+");
+	p1					=	space.Replace(p1, "");
+	space				=	Новый РегулярноеВыражение("[^\s]+");
+	if space.match(code)
+	then 
+		return p1 + code + p2;
+	else
+		return p1;
+	endif
 EndFunction
 
 // парсит тело функции и возращает Beautified код
-Function parse_body(prev_item, bodyStr, lvl)    
-    _obj_re_2_nl        =   Новый РегулярноеВыражение("[\r\n]{2,}");
-    obj_nl              =   Новый РегулярноеВыражение("\s");
-    obj_oper_next       =   Новый РегулярноеВыражение("(?'prestart'[^ꡏ]*?)?(?'oper'Тогда|Цикл|Исключение|ИначеЕсли|Иначе)(?'body'[^ꡏ]+)");
-    _obj_opers          =   Новый РегулярноеВыражение("(?'oper'\s+(Если|Тогда|Иначе|ИначеЕсли|КонецЕсли|Для|Каждого|Пока|Цикл|КонецЦикла|Из|Попытка|Исключение|КонецПопытки))\s+");
-    ret_body            =   "";
-    sel_add             =   ""; 
-    bodyStr             =   obj_nl.Replace(bodyStr, " ");
-    Если СтрДлина(prev_item) > 0
-    Тогда              // если здесь непустое - значит вызвали из дочернего блока и надо его добавить в регулярку
-        Если СтрНайти(НСтр(prev_item), "попытка") > 0
-        Тогда
-            prev_item    =   "Попытки";
-        КонецЕсли;
-        sel_add         =   "(?'pre'[^ꡏ]*?)Конец" + obj_nl.Replace(prev_item, "");
-    КонецЕсли;
-    // разбираем блока кода с операторами на части
-    obj                 =   Новый РегулярноеВыражение(sel_add + "(?<prestart>[^ꡏ]*?)?(?<oper>Попытк|Если|Цикл)(?<body>[^ꡏ]+)(?<end>Конец(Цикла|Попытки|Если);)(?<afterend>[^ꡏ]*)");
-    bodyParts           =   obj.Matches(bodyStr);
-    bodys               =   bodyParts.Количество();
-    Если bodys = 0                                                              
-    Тогда //[^ꡏ]*?(Если|Для|Пока|Попытка|КонецЕсли|КонецЦикла|КонецПопытки)([^ꡏ]+)
-        ret_body        =   fix_start_pos(bodyStr, lvl);                        // если матчей 0 - это нижний уровень глубины и здесь возвращается последний блок вложенности
-    ИначеЕсли bodys = 1
-    Тогда
-        bodypart        =   bodyparts[0];                                       // этот самый матч
-        сnt             =   bodypart.Группы.Количество();                       // в рекурсивных вызовах будет больше полей
-        Если (сnt = 8) Тогда
-            iter        =   1;                                                      // и нам нужно смещение
-        Иначе
-            iter        =   0;
-        КонецЕсли;            
-        preStart        =   fix_start_pos(bodyPart.Группы[2].Значение, lvl);        // от начала текст до оператора
-        oper            =   fix_start_pos(bodyPart.Группы[3 + iter].Значение, lvl); // сам оператор
-        bodyEnd         =   fix_start_pos(bodyPart.Группы[5 + iter].Значение, lvl); // название закрывающего операнда
-        afterEnd        =   fix_start_pos(bodyPart.Группы[6 + iter].Значение, lvl);         // остаток кода без выравнивания блоково операндов        
-        mains           =   bodyPart.Группы[4 + iter].Значение;                             // всё остальное, после оператора
-        mainparts       =   obj_oper_next.matches(mains);                                   // разбираем её на запчасти
-        Если (mainparts.Количество() > 0) Тогда                                         // если они там есть
-            next_c_st   =   fix_start_pos(mainparts[0].Группы[2].Значение, lvl);        // next command statement
-            next_body   =   fix_start_pos(mainparts[0].Группы[3].Значение, lvl); // здесь получается вложенный кусок от начала кода до новых циклов или закрытия всех
-            condition   =   " " + mainparts[0].Группы[1].Значение;                      // паметры следующих операндов
-
-
-            next_str    =   parse_body(oper, next_body, lvl + 1);                       // отправлямся на анализ в рекурсивных вызов на следующий уровень вниз
-            Если _obj_opers.Match(next_str) Тогда
-                lvl     =   lvl - 1;
-            КонецЕсли;
-        Иначе
-            next_str    =   mains;                                                      // текст блока выполнения до Конец*
-        КонецЕсли;            
-        //next_str    =   parse_body(oper, next_body, lvl + 1);
-
-        ret_body        =   preStart + Символы.ПС                                       // код перед оператором
-                        +   oper + condition + Символы.ПС                               // оператор и условие
-                        +   next_c_st + Символы.ПС                                      // следующий оператор
-                        +   next_str + Символы.ПС
-                        +   bodyEnd + Символы.ПС
-                        +   afterEnd;
-    Иначе
-        Сообщить("Непредвиденный результат");
-    КонецЕсли;
-    ret_body            =   _obj_re_2_nl.Replace(ret_body, Символы.ПС);
-    Возврат ret_body
+Function parse_body(bodyStr, lvl)
+	_obj_opers          =   Новый РегулярноеВыражение("(?'code'[^ꡏ]*?)((\s|^)(?'elem'Для[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Из[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Цикл[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Если[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Тогда[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Иначе[^а-яА-ЯёЁ0-1a-zA-Z\\_]|ИначеЕсли[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Попытка[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Исключение[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Пока[^а-яА-ЯёЁ0-1a-zA-Z\\_]|КонецЕсли[^а-яА-ЯёЁ0-1a-zA-Z\\_]|КонецПопытки[^а-яА-ЯёЁ0-1a-zA-Z\\_]|КонецЦикла[^а-яА-ЯёЁ0-1a-zA-Z\\_]|По[^а-яА-ЯёЁ0-1a-zA-Z\\_]|И[^а-яА-ЯёЁ0-1a-zA-Z\\_]|Или[^а-яА-ЯёЁ0-1a-zA-Z\\_]))");
+	_obj_clean			=	Новый РегулярноеВыражение("\s+");
+	_obj_clean2			=	Новый РегулярноеВыражение("^\s{2}");
+	_obj_clean3			=	Новый РегулярноеВыражение("^\s+|\s+$");
+	ret					=	"";
+	ops					=	_obj_opers.Matches(bodyStr);
+	Если ops.Количество() = 0
+	Тогда
+		bodyStr			=	_obj_clean.Replace(bodyStr," ");
+		ret				=	fix_start_pos(bodyStr, lvl) + Символы.ПС;
+	Иначе
+		prev_op			=	"";
+		Для каждого op 
+		Из ops Цикл
+			op			=	op.Группы;
+			next_op		=	_obj_clean.Replace(op[4].Значение, " ");
+			next_op		=	_obj_clean3.Replace(next_op, "");
+			code		=	_obj_clean.Replace(op[3].Значение, " ");
+			code		=	_obj_clean3.Replace(op[3].Значение, "");
+			НачалоОп	=		СтрСравнить(next_op, "Для") = 0
+						Или		СтрСравнить(next_op, "Если") = 0
+						Или		СтрСравнить(next_op, "Пока") = 0;
+			Если НачалоОп
+			Тогда
+				ret		=	get_code(ret, fix_start_pos(code, lvl), Символы.ПС);
+				ret		=	ret +	fix_start_pos(next_op, lvl);
+				prev_op	=	next_op;
+			ИначеЕсли 	СтрСравнить(next_op, "Или") = 0
+			Или			СтрСравнить(next_op, "И") = 0
+			Тогда
+				ret		=	get_code(ret +	" ", code, Символы.ПС);
+				ret		=	ret +	fix_start_pos(next_op, lvl);
+				prev_op	=	next_op;			
+			ИначеЕсли  	СтрСравнить(next_op, "Попытка") = 0
+			Тогда
+				ret		=	get_code(ret, fix_start_pos(code, lvl),  Символы.ПС);
+				ret		=	ret +	fix_start_pos(next_op, lvl) + Символы.ПС;
+				prev_op	=	next_op;
+			ИначеЕсли  	СтрСравнить(next_op, "Из") = 0
+			Тогда
+				ret		=	ret +	" " + _obj_clean3.Replace(code, "") + " " + Символы.ПС;
+				ret		=	ret +	fix_start_pos(next_op, lvl);
+				prev_op	=	next_op;
+			ИначеЕсли  	СтрСравнить(next_op, "Тогда") = 0
+			Или			СтрСравнить(next_op, "Цикл") = 0
+			Тогда
+				Если 	СтрСравнить(prev_op, "Из") = 0
+				Тогда
+					ret		=	ret +	"          " + _obj_clean3.Replace(code, "") + Символы.ПС;
+				ИначеЕсли СтрСравнить(prev_op, "Или") = 0
+				Тогда
+					ret		=	ret +	"  " + _obj_clean3.Replace(code, "") + " " + Символы.ПС;
+				ИначеЕсли СтрСравнить(prev_op, "И") = 0
+				Тогда
+					ret		=	ret +	"    " + _obj_clean3.Replace(code, "") + " " + Символы.ПС;	
+				Иначе
+					ret		=	ret +	" " + _obj_clean3.Replace(code, "") + " " + Символы.ПС;
+				КонецЕсли;
+				ret		=	ret +	fix_start_pos(next_op, lvl) + Символы.ПС;
+				lvl		=	lvl + 1;
+				prev_op	=	next_op;
+			ИначеЕсли  СтрСравнить(next_op, "Иначе") = 0
+			Тогда
+					ret		=	ret +	fix_start_pos(code, lvl) + Символы.ПС;
+					ret		=	ret +	fix_start_pos(next_op, lvl-1) + Символы.ПС;
+					prev_op	=	next_op;
+			ИначеЕсли  СтрСравнить(next_op, "Исключение") = 0
+			Тогда
+					lvl		=	lvl + 1;
+					ret		=	get_code(ret, fix_start_pos(code, lvl), Символы.ПС);
+					ret		=	ret +	fix_start_pos(next_op, lvl - 1) + Символы.ПС;
+					prev_op	=	next_op;
+			ИначеЕсли  	СтрСравнить(next_op, "КонецЕсли;") = 0
+			Или			СтрСравнить(next_op, "КонецЦикла;") = 0
+			Или			СтрСравнить(next_op, "КонецПопытки;") = 0
+			Или			СтрСравнить(next_op, "ИначеЕсли") = 0
+			Тогда
+				ret		=	get_code(ret, fix_start_pos(code, lvl), Символы.ПС);
+				lvl		=	lvl - 1;
+				ret		=	ret +	fix_start_pos(next_op, lvl) + Символы.ПС;
+				prev_op	=	next_op;
+			Иначе
+				ret		=	ret +	fix_start_pos(code, 0) + Символы.ПС;
+				ret		=	ret +	fix_start_pos(next_op, 0) + Символы.ПС;
+			КонецЕсли;
+		КонецЦикла;
+	КонецЕсли;
+	Возврат ret;
 EndFunction
 
-_re_worlds              =   "([^ꡏ]*?)([\\_а-яА-ЯёЁa-zA-Z1-9]{2,});*";
+_re_worlds              =   "([^ꡏ]*?)([\\\_а-яА-ЯёЁa-zA-Z1-9]{2,});*";
 _re_spaces              =   "[\t ]{2,}";
 _obj_re_spaces          =   Новый РегулярноеВыражение(_re_spaces);
 _obj_end                =   Новый РегулярноеВыражение("$\r*\n*^[\t ]*$");
@@ -131,23 +172,23 @@ wTxt                    =   noDoubleNL;
     КонецЕсли;
     nameFunc            =   func.Группы[3].Значение;
 
-    paramsFunc          =   _obj_re_2_nl.Replace(func.Группы[4].Значение, Символы.ПС);
+    paramsFunc          =   _obj_re_nl.Replace(func.Группы[4].Значение, " ");
 
-    expFunc             =   func.Группы[5].Значение;
+    expFunc             =   _obj_re_nl.Replace(func.Группы[5].Значение, "");
 
     bodyFunc            =   _obj_re_nl.Replace(func.Группы[6].Значение, Символы.ПС);
-    bodyFunc            =   _obj_re_spaces.Replace(bodyFunc, " ");
-    bodyFunc            =   parse_body("", bodyFunc, 1);
+    bodyFunc            =   Символы.ПС + parse_body(bodyFunc, 1);
 
     endFunc             =   _obj_re_nl.Replace(func.Группы[7].Значение, " ");
     endFunc             =   _obj_re_spaces.Replace(endFunc, " ");
     Утверждения.ПроверитьНеРавенство(endFunc, "", "Пустое значение конца функции");
     tFuncNew            =   typeFunc + nameFunc + "(" + paramsFunc + ")" + expFunc + Символы.ПС
-                        +   bodyFunc + Символы.ПС 
+                        +   bodyFunc + Символы.ПС
                         +   endFunc; 
-    tFuncNew            =   _obj_end.Replace(tFuncNew, "");
+    //tFuncNew            =   _obj_end.Replace(tFuncNew, "");
     tFuncNew            =   preFunc + Символы.ПС + tFuncNew + Символы.ПС;
     wTxt                =   СтрЗаменить(wTxt, wholeMatch, tFuncNew);    
+	Сообщить("Работаю над " + nameFunc);
 КонецЦикла;
 
 ИсхФайл                 =   Новый ЗаписьТекста();
