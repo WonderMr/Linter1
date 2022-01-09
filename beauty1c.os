@@ -115,25 +115,16 @@ Function fix_start_pos(f_str, lvl)
     Возврат fixed2
 EndFunction
 
-Function get_non_empty(p1, code, p2)
-	space				=	Новый РегулярноеВыражение("^(\r*\n)+");
-	p1					=	space.Replace(p1, "");
-	space				=	Новый РегулярноеВыражение("[^\s]+");
-	if space.match(code)
-	then 
-		return p1 + code + p2;
-	else
-		return p1;
-	endif
-EndFunction
 
-_obj_re_nonprintable    =   Новый РегулярноеВыражение("\s+");
+_obj_re_nonprintable    =   Новый РегулярноеВыражение("\s*\r*\n*");
 _obj_re_comments		=	Новый РегулярноеВыражение("(?<![""|])\/\/.*");
 _obj_re_s2          	=   Новый РегулярноеВыражение("[\t ]{2,}");
 _obj_re_printable  		=   Новый РегулярноеВыражение("[^\s|;]+");
 _obj_re_nl              =   Новый РегулярноеВыражение("\r*\n");
 _obj_re_tab				=	Новый РегулярноеВыражение("\t");
 _pagba					=	Символ(43103);
+_obj_re_fix            =   Новый РегулярноеВыражение("^");
+_obj_re_restore            =   Новый РегулярноеВыражение(_pagba);
 _re_funcs               =   "(?<code>[^" + _pagba + "]*?)(?<until>(?<pre_comp_instr_block>\s[\#\&].+)|"
 						+	"(?<func_block>(?<!\/\/)[\s|;]"
 						+		"(?<func_type>Функция|Процедура|Function|Procedure)"
@@ -265,6 +256,8 @@ newstr					=	"";
 	Продолжить;
 КонецЦикла;
 
+wTxt					=	_obj_re_fix.Replace(wTxt, _pagba);
+
 eqs						=	_obj_re_equals.Matches(wTxt);
 max						=	0;
 Для каждого eq
@@ -285,12 +278,7 @@ max						=	0;
 Результат = Новый Массив;
 Кэш = Новый Соответствие;
 Для каждого Элемент из eqs Цикл
-	Если ЗначениеЗаполнено(Элемент.Группы[1].Значение)
-	Тогда
-		ИмяЭтого		= Элемент.Группы[0].Значение;
-	Иначе
-		ИмяЭтого		= Элемент.Группы[5].Значение+Элемент.Группы[6].Значение;
-	КонецЕсли;
+	ИмяЭтого		= Элемент.Группы[0].Значение;
    Если Кэш[ИмяЭтого]=неопределено Тогда
 		Сообщить("Добавляю "+ИмяЭтого);
 	   Кэш[ИмяЭтого] = Истина;
@@ -309,20 +297,19 @@ max						=	0;
 	spaces_len			=	СтрДлина(spaces_part);
 	Если ЗначениеЗаполнено(left_part)
 	Тогда
-	
-	newspaces			=	max - left_len;
+		newspaces			=	max - left_len + 1;
 		new_equals			=	left_part + ss(newspaces) + mid_part + "  " + right_part;
 	Иначе
-		
-	new_equals			=	ss(max) + mid_part + "  " + right_part;
+		new_equals			=	ss(max + 1) + mid_part + "  " + right_part;
 	КонецЕсли;
 	Сообщить(new_equals);
 	wTxt				=	СтрЗаменить(wTxt, full_match, new_equals);
 	//Сообщить(wTxt);
 КонецЦикла;
+wTxt					=	_obj_re_restore.Replace(wTxt,"");
 
-in_test_txt				=	_obj_re_nonprintable.Replace(noCommentsTxt, "");
-out_test_txt			=	_obj_re_nonprintable.Replace(wTxt, "");
+in_test_txt				=	_obj_re_nonprintable.Replace(noCommentsTxt, " ");
+out_test_txt			=	_obj_re_nonprintable.Replace(wTxt, " ");
 
 _in_words				=	_obj_re_printable.Matches(in_test_txt);
 _in_w_count				=	_in_words.Количество();
@@ -344,6 +331,6 @@ _out_w_count			=	_out_words.Количество();
 
 ИсхФайл                 =   Новый ЗаписьТекста();
 ИсхФайл.Открыть(in_name + ".txt", "UTF-8");
-ИсхФайл.Записать(wTxt);
+ИсхФайл.Записать(Символы.ПС + wTxt);
 ИсхФайл.Закрыть();
 ЗапуститьПриложение("""c:\Program Files\Notepad++\notepad++.exe"" " + in_name + ".txt");
